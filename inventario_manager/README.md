@@ -1,0 +1,1 @@
+# Sistema de Inventario PySide6 + Access
