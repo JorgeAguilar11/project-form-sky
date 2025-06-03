@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QLineEdit,
-    QComboBox, QDateEdit, QCheckBox, QTextEdit, QPushButton, QMessageBox, QScrollArea
+    QComboBox, QDateEdit, QCheckBox, QTextEdit, QPushButton, QMessageBox, QScrollArea, QCompleter
 )
 from PySide6.QtGui import QIntValidator, QDoubleValidator
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
 import sys
+import csv
 
 class FormularioEntrada(QWidget):
     def __init__(self):
@@ -12,6 +13,9 @@ class FormularioEntrada(QWidget):
         self.setWindowTitle("Formulario de Entrada de Mercancía")
         self.setMinimumWidth(700)
         layout = QVBoxLayout()
+
+        # --- Cargar maestro de artículos ---
+        self.cargar_maestro_articulos()
 
         # --- Información General del Producto ---
         grupo_producto = QGroupBox("INFORMACIÓN GENERAL DEL PRODUCTO")
@@ -25,6 +29,12 @@ class FormularioEntrada(QWidget):
         self.nombre_input.setMinimumWidth(400)
         layout_producto.addWidget(label_nombre)
         layout_producto.addWidget(self.nombre_input)
+
+        # --- Autocompletar nombre y llenar código ---
+        completer = QCompleter(list(self.productos.keys()))
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.nombre_input.setCompleter(completer)
+        self.nombre_input.editingFinished.connect(self.autocompletar_codigo)
 
         # Código del producto
         label_codigo = QLabel("Código del producto:")
@@ -199,12 +209,24 @@ class FormularioEntrada(QWidget):
         self.guardar_btn.clicked.connect(self.guardar_datos)
         self.limpiar_btn.clicked.connect(self.limpiar_campos)
 
+    def cargar_maestro_articulos(self):
+        self.productos = {}
+        with open("maestro_articulos.csv", newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                self.productos[row["nombre_producto"]] = row["codigo"]
+
+    def autocompletar_codigo(self):
+        nombre = self.nombre_input.text().strip()
+        codigo = self.productos.get(nombre)
+        if codigo:
+            self.codigo_input.setText(codigo)
+
     def guardar_datos(self):
         # Aquí puedes agregar validaciones y lógica para guardar en CSV o base de datos
         QMessageBox.information(self, "Guardado", "¡Registro guardado (simulado)!")
 
     def limpiar_campos(self):
-        self.nombre_input.clear()
         self.codigo_input.clear()
         self.proveedor_combo.setCurrentIndex(0)
         self.cantidad_input.clear()
