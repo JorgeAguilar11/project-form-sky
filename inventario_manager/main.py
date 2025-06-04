@@ -15,7 +15,7 @@ class FormularioEntrada(QWidget):
         layout = QVBoxLayout()
 
         # --- Cargar maestro de artículos ---
-        self.cargar_maestro_articulos()
+        self.cargar_maestro_articulos()  # CAMBIO: ahora carga productos con proveedores
 
         # --- Información General del Producto ---
         grupo_producto = QGroupBox("INFORMACIÓN GENERAL DEL PRODUCTO")
@@ -33,8 +33,9 @@ class FormularioEntrada(QWidget):
         # --- Autocompletar nombre y llenar código ---
         completer = QCompleter(list(self.productos.keys()))
         completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)  # <-- Esto permite buscar en cualquier parte del texto
         self.nombre_input.setCompleter(completer)
-        self.nombre_input.editingFinished.connect(self.autocompletar_codigo)
+        self.nombre_input.editingFinished.connect(self.autocompletar_codigo)  # CAMBIO
 
         # Código del producto
         label_codigo = QLabel("Código del producto:")
@@ -42,6 +43,7 @@ class FormularioEntrada(QWidget):
         self.codigo_input = QLineEdit()
         self.codigo_input.setValidator(QIntValidator())
         self.codigo_input.setFixedWidth(120)
+        self.codigo_input.setReadOnly(True)  # <-- SOLO LECTURA, NO EDITABLE
         layout_producto.addWidget(label_codigo)
         layout_producto.addWidget(self.codigo_input)
 
@@ -49,12 +51,10 @@ class FormularioEntrada(QWidget):
         label_proveedor = QLabel("Proveedor:")
         label_proveedor.setStyleSheet("color: #CCCCCC; font-size: 10pt;")
         self.proveedor_combo = QComboBox()
-        self.proveedor_combo.addItems([
-            "NEGOCIOS CENTROAMERICANOS, S.A.", "PROVEEDOR 2", "PROVEEDOR 3"
-        ])
         layout_producto.addWidget(label_proveedor)
         layout_producto.addWidget(self.proveedor_combo)
-
+        self.proveedor_combo.currentIndexChanged.connect(self.actualizar_codigo_unidad)  # CAMBIO
+        
         # Cantidad y Unidad en la misma línea
         cantidad_layout = QHBoxLayout()
         cantidad_label = QLabel("CANTIDAD:")
@@ -64,14 +64,15 @@ class FormularioEntrada(QWidget):
         self.cantidad_input.setFixedWidth(80)
         unidad_label = QLabel("Unidad de medida:")
         unidad_label.setStyleSheet("color: #CCCCCC; font-size: 10pt; margin-left: 10px;")
-        self.unidad_combo = QComboBox()
-        self.unidad_combo.addItems(["C/U", "LB", "KG"])
-        self.unidad_combo.setFixedWidth(80)
+        self.unidad_label_valor = QLabel("")  # CAMBIO: QLabel en vez de QComboBox
+        self.unidad_label_valor.setStyleSheet("color: #CCCCCC; font-size: 10pt; background: #222; padding-left: 8px; border-radius: 4px;")
+        self.unidad_label_valor.setFixedWidth(80)
+        self.unidad_label_valor.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         cantidad_layout.addWidget(cantidad_label)
         cantidad_layout.addWidget(self.cantidad_input)
-        cantidad_layout.addSpacing(10)
+        cantidad_layout.addSpacing(20)
         cantidad_layout.addWidget(unidad_label)
-        cantidad_layout.addWidget(self.unidad_combo)
+        cantidad_layout.addWidget(self.unidad_label_valor)  # CAMBIO
         cantidad_layout.addStretch()
         layout_producto.addLayout(cantidad_layout)
 
@@ -209,18 +210,44 @@ class FormularioEntrada(QWidget):
         self.guardar_btn.clicked.connect(self.guardar_datos)
         self.limpiar_btn.clicked.connect(self.limpiar_campos)
 
+    # CAMBIO: ahora carga productos agrupados por nombre, cada uno con lista de proveedores
     def cargar_maestro_articulos(self):
         self.productos = {}
         with open("maestro_articulos.csv", newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                self.productos[row["nombre_producto"]] = row["codigo"]
+                nombre = row["nombre_producto"]
+                if nombre not in self.productos:
+                    self.productos[nombre] = []
+                self.productos[nombre].append({
+                    "codigo": row["codigo"],
+                    "unidad": row["unidad"],
+                    "proveedor": row["proveedor"]
+                })
 
+    # CAMBIO: actualiza proveedores, código y unidad según el producto seleccionado
     def autocompletar_codigo(self):
         nombre = self.nombre_input.text().strip()
-        codigo = self.productos.get(nombre)
-        if codigo:
-            self.codigo_input.setText(codigo)
+        opciones = self.productos.get(nombre)
+        if opciones:
+            proveedores = [op["proveedor"] for op in opciones]
+            self.proveedor_combo.clear()
+            self.proveedor_combo.addItems(proveedores)
+            # Llena código y unidad del primer proveedor por defecto
+            self.codigo_input.setText(opciones[0]["codigo"])
+            self.unidad_label_valor.setText(opciones[0]["unidad"])
+
+    # CAMBIO: al cambiar proveedor, actualiza código y unidad
+    def actualizar_codigo_unidad(self):
+        nombre = self.nombre_input.text().strip()
+        opciones = self.productos.get(nombre)
+        if opciones:
+            proveedor = self.proveedor_combo.currentText()
+            for op in opciones:
+                if op["proveedor"] == proveedor:
+                    self.codigo_input.setText(op["codigo"])
+                    self.unidad_label_valor.setText(op["unidad"])
+                    break
 
     def guardar_datos(self):
         # Aquí puedes agregar validaciones y lógica para guardar en CSV o base de datos
@@ -230,7 +257,7 @@ class FormularioEntrada(QWidget):
         self.codigo_input.clear()
         self.proveedor_combo.setCurrentIndex(0)
         self.cantidad_input.clear()
-        self.unidad_combo.setCurrentIndex(0)
+        self.unidad_label_valor.clear()
         self.lote_input.clear()
         self.fecha_recepcion.setDate(QDate.currentDate())
         self.tipo_producto_combo.setCurrentIndex(0)
